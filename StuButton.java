@@ -22,6 +22,8 @@ import androidx.annotation.StringRes;
 import java.util.ArrayList;
 import java.util.List;
 
+import static android.content.ContentValues.TAG;
+
 public class StuButton extends RelativeLayout {
 
     private static final String TAG = "StuButton";
@@ -41,7 +43,7 @@ public class StuButton extends RelativeLayout {
     private int sliderPosition = 0; // 922
     private int initialSliderPosition = 0; // 0
     private float initialSlidingX = 0; // 394.987
-    private boolean unLock = false;
+    private boolean unLock;
     private int direction = 0;
 
     public StuButton(Context context) {
@@ -86,34 +88,13 @@ public class StuButton extends RelativeLayout {
                 return false;
             }
         });
-        //setViewReverse();
+
     }
 
     public void setOnUnlockListener(OnUnlockListener listener) {
         this.listener = listener;
     }
 
-    public void resetRight() {
-        final RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) stuImgThumb.getLayoutParams();
-        ValueAnimator animator = ValueAnimator.ofInt(((getWidth()-thumbWidth)-params.leftMargin), 0);
-        Log.d(TAG+"_resetLeft ",params.leftMargin+"::"+((getMeasuredWidth()-params.leftMargin)));
-        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                Log.d(TAG,"_onAnimationUpdate: "+(Integer) valueAnimator.getAnimatedValue());
-                if (stuImgThumb != null) {
-                    int margin = (getWidth()-thumbWidth)-((Integer) valueAnimator.getAnimatedValue());
-                    Log.d(TAG,"_onAnimationUpdate: "+margin+"  "+(Integer) valueAnimator.getAnimatedValue());
-                    params.leftMargin = margin;
-                    stuImgThumb.requestLayout();
-                    direction = 0;
-                }
-            }
-        });
-        animator.setDuration(ANIMATION_DURATION);
-        animator.start();
-        stuTxtLabel.setAlpha(1f);
-    }
 
     public void resetLeft() {
         final RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) stuImgThumb.getLayoutParams();
@@ -122,13 +103,16 @@ public class StuButton extends RelativeLayout {
         animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                Log.d(TAG,"_onAnimationUpdate: "+(Integer) valueAnimator.getAnimatedValue());
                 if (stuImgThumb != null) {
                     int progress = (Integer) valueAnimator.getAnimatedValue();
                     params.leftMargin = progress;
                     stuImgThumb.requestLayout();
-                    //setMarginLeft(progress);
-                    //stuImgThumb.setTranslationX(progress);
+
+                    if(listener!=null && unLock && progress==0){
+                        listener.onlock();
+                        unLock = false;
+                        Log.d(TAG,"resetLeft: "+(Integer) valueAnimator.getAnimatedValue()+" "+progress+"  "+unLock);
+                    }
 
                 }
             }
@@ -139,26 +123,10 @@ public class StuButton extends RelativeLayout {
 
     }
 
-   /* public void moveToRightExpand() {
-        ValueAnimator valueAnimator = ValueAnimator.ofFloat(0f, 130f);
-        valueAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
-        valueAnimator.setDuration(250);
-        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                float progress = (float) animation.getAnimatedValue();
-                buttonContainer.setTranslationX(progress);
-            }
-        });
-
-        valueAnimator.start();
-        isPressed = true;
-    }*/
-
-
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         super.onTouchEvent(event);
+        Log.d(TAG+"_onTouchEvent__", ""+event.getAction());
 
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             Log.d(TAG+"_MotionEvent.ACTION_DOWN", ""+event.getAction());
@@ -166,10 +134,16 @@ public class StuButton extends RelativeLayout {
                 sliding = true;
                 initialSlidingX = event.getX();
                 initialSliderPosition = sliderPosition;
+            }else if (event.getX() >= sliderPosition && event.getX() > (sliderPosition - thumbWidth) && unLock) {
+                sliding = true;
+                initialSlidingX = event.getX();
+                initialSliderPosition = sliderPosition;
+            }else {
+                sliding = false;
             }
-        } else if (event.getAction() == MotionEvent.ACTION_MOVE && sliding) {
-            Log.d(TAG+"_MotionEvent.ACTION_MOVE", ""+event.getAction());
+        }else if (event.getAction() == MotionEvent.ACTION_MOVE && sliding) {
             sliderPosition = (int) (initialSliderPosition + (event.getX() - initialSlidingX));
+            Log.d(TAG,"sliderPosition_"+sliderPosition+"  initialSliderPosition_"+initialSliderPosition+" event.getX()_"+event.getX()+" initialSlidingX_"+initialSlidingX);
 
             if (sliderPosition <= 0) {
                 sliderPosition = 0;
@@ -179,11 +153,9 @@ public class StuButton extends RelativeLayout {
             } else {
                 int max = getMeasuredWidth() - thumbWidth;
                 int progress = (int) (sliderPosition * 100 / (max * 1.0f));
-                Log.d(TAG+"_progress",""+progress);
                 stuTxtLabel.setAlpha(1f - progress * ALPHA_MODIFIER);
             }
-            //setLayoutParamMarginRight(sliderPosition);
-            setLayoutParamMargin(sliderPosition);
+            setMarginLeft(sliderPosition);
 
         }else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_OUTSIDE) {
             if (sliderPosition >= (getMeasuredWidth() - thumbWidth)) {
@@ -191,64 +163,46 @@ public class StuButton extends RelativeLayout {
                 if (listener != null) {
                     listener.onUnlock();
                     unLock = true;
+                    sliding = false;
+                    Log.d(TAG,"SliderPosition: "+sliderPosition);
                 }
             }else if (sliderPosition <=0) {
                 Log.d(TAG, "_MotionEvent.ACTION_UP "+event.getAction()+" "+sliderPosition);
-                if (listener != null) {
+                if (listener != null ) {
                     listener.onlock();
                     unLock = false;
+                    sliding = false;
+                    Log.d(TAG,"SliderPosition: "+sliderPosition);
                 }
             } else {
-                // if(unLock) {
-               /* if(direction.equals("Left")) {
-                    sliding = false;
-                    sliderPosition = 0;
-                    resetLeft();
-                }
-                if(direction.equals("Right")) {
-                    sliding = false;
-                    sliderPosition = 922;
-                    resetLeft();
-                }*/
-                if(!unLock) {
-                    sliding = true;
-                    sliderPosition = 0;
-                    Log.d(TAG, "direction_" + direction);
-                    resetLeft();
-                }
-                if(unLock){
-                    sliding = true;
-                    sliderPosition = 922;
-                    Log.d(TAG, "direction_" + direction);
-                    resetRight();
-                }
-                //resetRight();
-                // workout
-                // }
+                sliding = true;
+                sliderPosition = 0;
+                resetLeft();
             }
         }
 
         return true;
     }
 
+
     public void setViewReverse(){
         setLayoutParamMargin(getMeasuredWidth() - thumbWidth);
-        sliderPosition = 922;
+        sliderPosition = getMeasuredWidth()-thumbWidth;
         unLock = true;
+        sliding = false;
+        Log.d(TAG,"SliderPosition: "+sliderPosition);
+
     }
 
     public void setViewForward(){
         setLayoutParamMargin(0);
         unLock = false;
+        sliding = false;
+        sliderPosition = 0;
     }
 
     private void setMarginLeft(int margin) {
         if (stuImgThumb == null) return;
-        Log.d(TAG+"_setMarginLeft",""+margin);
-        /* if (listener != null) {
-            listener.onUnlock();
-        }*/
-
        setLayoutParamMargin(margin);
     }
 
@@ -260,9 +214,9 @@ public class StuButton extends RelativeLayout {
     }
     private void setLayoutParamMarginRight(int margin) {
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) stuImgThumb.getLayoutParams();
-        params.setMargins(getMeasuredWidth()-margin, params.topMargin, margin, params.bottomMargin);
+        params.setMargins(300, params.topMargin, params.rightMargin, params.bottomMargin);
         stuImgThumb.setLayoutParams(params);
-        Log.d(TAG,"margin:: "+(getMeasuredWidth()-margin)+" "+params.topMargin+" "+margin+" "+params.bottomMargin);
+        Log.d(TAG,"marginRight:: "+margin+" "+(getMeasuredWidth()-margin)+" ");
     }
 
     @Override
@@ -361,4 +315,46 @@ public class StuButton extends RelativeLayout {
         void onUnlock();
         void onlock();
     }
+
+
+
+   /* public void moveToRightExpand() {
+        ValueAnimator valueAnimator = ValueAnimator.ofFloat(0f, 130f);
+        valueAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+        valueAnimator.setDuration(250);
+        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float progress = (float) animation.getAnimatedValue();
+                buttonContainer.setTranslationX(progress);
+            }
+        });
+
+        valueAnimator.start();
+        isPressed = true;
+    }*/
+
+  /*  public void resetRight() {
+        final RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) stuImgThumb.getLayoutParams();
+        ValueAnimator animator = ValueAnimator.ofInt(((getWidth()-thumbWidth)-params.leftMargin), 0);
+        Log.d(TAG+"_resetLeft ",params.leftMargin+"::"+((getMeasuredWidth()-params.leftMargin)));
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                Log.d(TAG,"_onAnimationUpdate: "+(Integer) valueAnimator.getAnimatedValue());
+                if (stuImgThumb != null) {
+                    int margin = (getWidth()-thumbWidth)-((Integer) valueAnimator.getAnimatedValue());
+                    Log.d(TAG,"_onAnimationUpdate: "+margin+"  "+(Integer) valueAnimator.getAnimatedValue());
+                    params.leftMargin = margin;
+                    stuImgThumb.requestLayout();
+                    direction = 0;
+                }
+            }
+        });
+        animator.setDuration(ANIMATION_DURATION);
+        animator.start();
+        stuTxtLabel.setAlpha(1f);
+    }*/
+
+
 }
